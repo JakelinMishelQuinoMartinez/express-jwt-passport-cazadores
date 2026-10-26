@@ -14,3 +14,10 @@ export class PerfilCazadorDTO {
     this.admin = Boolean(cazador.admin ?? false);
   }
 }
+
+export class CrearRecompensaDTO {
+  constructor(data = {}) {
+    this.mision = String(data.mision ?? "").trim();
+    this.cristales = Number(data.cristales ?? 0);
+  }
+}
