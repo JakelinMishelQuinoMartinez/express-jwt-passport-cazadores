@@ -23,3 +23,11 @@ export async function listarUsuarios(req, res, next) {
     });
   } catch (error) { next(error); }
 }
+
+export async function registrarRecompensaBoveda(req, res, next) {
+  try {
+    const dto = new CrearRecompensaDTO(req.body);
+    const recompensa = await cazadorService.crearRecompensa(dto, req.user.username);
+    res.status(201).json({ data: recompensa });
+  } catch (error) { next(error); }
+}
