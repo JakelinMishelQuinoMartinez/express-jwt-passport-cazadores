@@ -13,3 +13,9 @@ export const validarLogin = [
   body("password").isLength({ min: 4, max: 60 }).withMessage("El password debe tener al menos 4 caracteres"),
   responderErrores,
 ];
+
+export const validarRecompensa = [
+  body("mision").trim().isLength({ min: 3, max: 80 }).withMessage("El nombre de la misión debe tener entre 3 y 80 caracteres"),
+  body("cristales").isInt({ min: 1, max: 100000 }).withMessage("Los cristales deben ser un entero positivo entre 1 y 100000"),
+  responderErrores,
+];
