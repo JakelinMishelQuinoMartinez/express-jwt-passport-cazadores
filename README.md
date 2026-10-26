@@ -4,7 +4,7 @@
 
 API REST desarrollada como práctica académica para demostrar autenticación con **Passport**, emisión y validación de **JWT**, autorización por rol y validación de datos. La temática representa un gremio de cazadores y una bóveda de recompensas.
 
-> **Alcance de esta versión:** los usuarios de prueba y las recompensas se guardan en memoria. Los cambios de recompensas se pierden al reiniciar el servidor. Aunque el proyecto incluye un esquema de Mongoose, actualmente no se conecta a MongoDB.
+Los cazadores y las recompensas se almacenan en MySQL. Al iniciar, la API crea las tablas necesarias e inserta los usuarios de prueba que aún no existan.
 
 ## Stack tecnológico
 
@@ -14,16 +14,51 @@ API REST desarrollada como práctica académica para demostrar autenticación co
 - **jsonwebtoken** para firmar JWT con HS256 y expiración de dos horas.
 - **express-validator** para validar los cuerpos de las solicitudes.
 - **CORS** para permitir solicitudes desde otros orígenes.
-- **Mongoose**: esquema de cazador definido, aún no conectado a una base de datos.
+- **mysql2**: conexión y consultas parametrizadas a MySQL.
 
 ## Requisitos e instalación
 
-Se requiere Node.js compatible con Express 5 (Node.js 18 o posterior) y npm.
+Se requiere Node.js compatible con Express 5 (Node.js 18 o posterior), npm y un servidor MySQL.
 
 ```bash
 git clone <URL-del-repositorio>
 cd express-jwt-passport-cazadores
 npm install
+```
+
+### Configurar la base de datos
+
+Crea la base de datos MySQL si todavía no existe:
+
+```sql
+CREATE DATABASE cazadores CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+En la raíz del proyecto, copia `.env.example` como `.env` y actualiza sus valores según tu instalación:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+En Linux o macOS, usa `cp .env.example .env`.
+
+El archivo contiene estas variables:
+
+| Variable | Descripción |
+|---|---|
+| `DB_HOST` | Host del servidor MySQL. |
+| `DB_PORT` | Puerto de MySQL. |
+| `DB_USER` | Usuario de MySQL. |
+| `DB_PASSWORD` | Contraseña de MySQL. |
+| `DB_DATABASE` | Base de datos que usará la API. |
+
+No compartas ni subas `.env` al repositorio; úsalo para tus credenciales locales. La API carga ese archivo al iniciar y no inicia si no puede conectarse a MySQL. Las tablas `cazadores` y `recompensas` se crean automáticamente; los cazadores de prueba se insertan únicamente si no existen, por lo que sus cambios en la base de datos no se sobrescriben al reiniciar.
+
+### Iniciar el servidor
+
+Con MySQL ejecutándose y `.env` configurado, inicia la API:
+
+```bash
 npm run dev
 ```
 
@@ -40,9 +75,9 @@ Todas las rutas de la API —excepto la comprobación de estado— usan el prefi
 | `GET` | `/health` | Público | Comprueba que el servidor está activo. |
 | `POST` | `/api/v1/users/authenticate` | Público | Valida credenciales y devuelve un JWT. |
 | `GET` | `/api/v1/user/list` | JWT | Devuelve la identidad del token y los perfiles de cazadores. |
-| `POST` | `/api/v1/boveda/recompensa` | JWT de administrador | Registra una recompensa en memoria. |
+| `POST` | `/api/v1/boveda/recompensa` | JWT de administrador | Registra una recompensa en MySQL. |
 
-Las solicitudes con cuerpo deben usar `Content-Type: application/json`. Las rutas protegidas requieren el encabezado:
+Las solicitudes con cuerpo deben usar `Content-Type: application/json`. Las rutas protegidas requieren un token JWT:
 
 ```text
 Authorization: Bearer <token>
@@ -58,30 +93,33 @@ Authorization: Bearer <token>
 
 El usuario `satinder` es necesario para probar la ruta de creación de recompensas. Estas credenciales y la clave JWT predeterminada son únicamente para desarrollo y demostración; no deben usarse en producción.
 
-## Pruebas desde la terminal con `curl`
+## Pruebas de los endpoints
 
-Los siguientes ejemplos realizan el inicio de sesión y muestran cómo copiar el token de la respuesta para las solicitudes protegidas. Reemplaza `<TOKEN>` por el valor recibido en el campo `token`.
+Con el servidor iniciado, comprueba primero el estado de la API y luego autentícate. Usa el token devuelto en las dos rutas protegidas.
 
 ### Windows PowerShell
 
-En PowerShell usa `curl.exe` para invocar `curl` y no el alias de PowerShell:
-
 ```powershell
-curl.exe http://localhost:4000/health
+Invoke-RestMethod http://localhost:4000/health
 
-curl.exe -X POST http://localhost:4000/api/v1/users/authenticate `
-  -H "Content-Type: application/json" `
-  -d '{"username":"satinder","password":"12345"}'
+$login = Invoke-RestMethod `
+  -Uri http://localhost:4000/api/v1/users/authenticate `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body (@{ username = "satinder"; password = "12345" } | ConvertTo-Json)
 
-$TOKEN = "<TOKEN>"
+$TOKEN = $login.token
 
-curl.exe http://localhost:4000/api/v1/user/list `
-  -H "Authorization: Bearer $TOKEN"
+Invoke-RestMethod `
+  -Uri http://localhost:4000/api/v1/user/list `
+  -Headers @{ Authorization = "Bearer $TOKEN" }
 
-curl.exe -X POST http://localhost:4000/api/v1/boveda/recompensa `
-  -H "Authorization: Bearer $TOKEN" `
-  -H "Content-Type: application/json" `
-  -d '{"mision":"Caceria de prueba","cristales":250}'
+Invoke-RestMethod `
+  -Uri http://localhost:4000/api/v1/boveda/recompensa `
+  -Method Post `
+  -Headers @{ Authorization = "Bearer $TOKEN" } `
+  -ContentType "application/json" `
+  -Body (@{ mision = "Caceria de prueba"; cristales = 250 } | ConvertTo-Json)
 ```
 
 ### Linux (Bash)
@@ -110,14 +148,15 @@ El cuerpo de una recompensa requiere `mision` (entre 3 y 80 caracteres) y `crist
 
 ```text
 src/
-├── app.js                       # Configuración de Express, middleware y servidor
+├── app.js                       # Configuración de Express, middleware e inicio
+├── config/database.js           # Pool MySQL, tablas e inicialización de semillas
 ├── config/passport.js           # Estrategias Local y JWT
 ├── controllers/auth.controller.js # Controladores de autenticación y recompensas
 ├── dtos/cazador.dto.js          # Normalización de datos y perfiles de respuesta
 ├── middlewares/
 │   ├── auth.middleware.js       # Autenticación JWT/Local y autorización admin
 │   └── error.middleware.js      # Respuestas 404 y manejo de errores
-├── models/cazador.model.js      # Esquema Mongoose y usuarios semilla
+├── models/cazador.model.js      # Datos semilla de los cazadores
 ├── routes/auth.routes.js        # Definición de endpoints
 ├── services/cazador.service.js  # Lógica de cazadores, JWT y recompensas
 └── validators/auth.validator.js # Validaciones de entrada
