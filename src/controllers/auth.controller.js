@@ -8,3 +8,18 @@ export async function autenticarUsuario(req, res, next) {
     res.status(200).json({ token, tipo: "Bearer", expiraEn: "2h", cazador: perfil });
   } catch (error) { next(error); }
 }
+
+export async function listarUsuarios(req, res, next) {
+  try {
+    const cazadores = await cazadorService.listarPerfiles();
+    res.status(200).json({
+      identidadToken: {
+        sub: req.user.claims?.sub,
+        username: req.user.username,
+        name: req.user.name,
+        admin: req.user.admin,
+      },
+      data: cazadores,
+    });
+  } catch (error) { next(error); }
+}
