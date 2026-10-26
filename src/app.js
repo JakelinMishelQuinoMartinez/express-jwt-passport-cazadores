@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { configurarPassport } from "./config/passport.js";
+import { inicializarBaseDatos } from "./config/database.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { manejarError, rutaNoEncontrada } from "./middlewares/error.middleware.js";
 
@@ -27,8 +28,16 @@ app.use(manejarError);
 
 const PORT = process.env.PORT || 4000;
 
-app.listen(PORT, () => {
-  console.log(`API escuchando en http://localhost:${PORT}`);
+async function iniciarServidor() {
+  await inicializarBaseDatos();
+  app.listen(PORT, () => {
+    console.log(`API escuchando en http://localhost:${PORT}`);
+  });
+}
+
+iniciarServidor().catch((error) => {
+  console.error("No se pudo iniciar la API o conectar con MySQL:", error);
+  process.exitCode = 1;
 });
 
 export default app;
